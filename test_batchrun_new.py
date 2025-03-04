@@ -58,7 +58,7 @@ ORDER = 1
 
 
 
-nbatch = 100
+nbatch = 5000
 nstate = 2
 init_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
 init_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
@@ -84,7 +84,7 @@ for i in range(ORDER):
 # print(flags_pt)
 
 key_used,pt_used,state_used = target.batchRun(nbatch, nstate, init_key, init_pt, flags_key, flags_pt, refreshes)#, seed=seed
-
+time.sleep(3.4)
 last_ct_shares = target.readOutput()
 last_ct_shares = bytes(last_ct_shares)
 last_ct = xorbytes(last_ct_shares, 1)

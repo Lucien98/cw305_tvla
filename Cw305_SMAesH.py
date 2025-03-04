@@ -14,6 +14,10 @@ import re
 from datetime import datetime
 from chipwhisperer.capture.targets.CW305 import CW305
 
+import sys
+sys.path.append('./board_interfaces')
+sys.path.append('./library')
+from pico_if import *
 
 ranges_mV = {
     10: 0,
@@ -33,27 +37,12 @@ ranges_mV = {
 }
 
 
-# target = cw.target(\
-#     None,\
-#     cw.targets.CW305,\
-#     bsfile="cw305_opt.bit", \
-#     force=True,\
-# )
-
-# target = cw.target(None, cw.targets.CW305)#, bsfile="./cw305_opt.bit", force=True
 bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top.bit"
+bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/bitstream/cw305_top_wrng.bit"
 target = CW305()
 target.con(bsfile=bitstream_path, force=True)
 print(bitstream_path)
 
-# f = open("cw305_defines.v")
-# for l in f:
-#     if re.match("^`define [^ ]*[ ]*'h[\d|a-f][\d|a-f]", l):
-#         l = l.split(" ")
-#         k,v = l[1],l[-1]
-#         v = int(v[2:],16)
-#         globals()[k] = v
-# f.close()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--with-trigger', action='store_true')
@@ -80,19 +69,6 @@ target.clksleeptime = 1
 
 ORDER = 1
 
-# key = [0x21, 0xef, 0x78, 0x01, \
-#        0x43, 0xbe, 0x56, 0xef, \
-#        0x65, 0xad, 0x34, 0xcd, \
-#        0x87, 0xde, 0x12, 0xab]
-
-# key_0 = [np.random.randint(0,256) for i in range(0,16)]
-# key_1 = [np.random.randint(0,256) for i in range(0,16)]
-# key_2 = [key_0[i]^key_1[i]^key[i] for i in range(0,16)]
-
-# target.fpga_write(REG_CRYPT_KEY_0, bytearray(reversed(key_0)))
-# target.fpga_write(REG_CRYPT_KEY_1, bytearray(reversed(key_1)))
-# target.fpga_write(REG_CRYPT_KEY_2, bytearray(reversed(key_2)))
-# time.sleep(0.001)
 def printBytes(info, data):
     n = len(data)*2
     data = hex(int.from_bytes(data, 'big')).upper()
@@ -260,85 +236,65 @@ def batchRun():
 
 
 
-def get_measurements(num_measures, preTrigger, postTrigger, chandle, cmaxSamples, timebase):
-    status = {}
-    ############## Step 0 #####################
-    # X = np.random.randint(0,2,num_measures,dtype=np.uint16)
-    # pt_0 = []
-    # pt_1 = []
-    # pt_2 = []
-    # for nti in range(0, num_measures):
-    #     fixed = X[nti]
-    #     if fixed:
-    #         pt1 = [np.random.randint(0, 256) for i in range(0,16)]
-    #         pt2 = [np.random.randint(0, 256) for i in range(0,16)]
-    #         pt0 = [pt1[i] ^ pt2[i] for i in range(0,16)]
-    #     else:
-    #         pt0 = [np.random.randint(0, 256) for i in range(0,16)]
-    #         pt1 = [np.random.randint(0, 256) for i in range(0,16)]
-    #         pt2 = [np.random.randint(0, 256) for i in range(0,16)]
-    #     pt_0.append(pt0)
-    #     pt_1.append(pt1)
-    #     pt_2.append(pt2)
-    # key = [0x21, 0xef, 0x78, 0x01, \
-    #    0x43, 0xbe, 0x56, 0xef, \
-    #    0x65, 0xad, 0x34, 0xcd, \
-    #    0x87, 0xde, 0x12, 0xab]
-    ############## Step 6 #####################
-    # Start the oscilloscope running using ps6000RunBlock.
-    status["runBlock"] = ps.ps6000RunBlock(
-        chandle, preTrigger, postTrigger, timebase, 0, None, 0, None, None
-    )
-    assert_pico_ok(status["runBlock"])
-    time.sleep(1)
-    overflow = (ctypes.c_int64 * num_measures)()
-    ready = ctypes.c_int16(0)
-    check = ctypes.c_int16(0)
+def get_measurements(pico, num_measures, preTrigger, postTrigger):
+    # status = {}
+    # ############## Step 6 #####################
+    # # Start the oscilloscope running using ps6000RunBlock.
+    # status["runBlock"] = ps.ps6000RunBlock(
+    #     chandle, preTrigger, postTrigger, timebase, 0, None, 0, None, None
+    # )
+    # assert_pico_ok(status["runBlock"])
+    # time.sleep(1)
+    # overflow = (ctypes.c_int64 * num_measures)()
+    # ready = ctypes.c_int16(0)
+    # check = ctypes.c_int16(0)
+    pico.runBlock()
 
     ############## Step 7 #####################
     # Wait until the oscilloscope is ready using the ps6000BlockReady callback.
     # print(2)
     state_used = batchRun()
-    while ready.value == check.value:
-        status["isReady"] = ps.ps6000IsReady(chandle, ctypes.byref(ready))
+    # while ready.value == check.value:
+    #     status["isReady"] = ps.ps6000IsReady(chandle, ctypes.byref(ready))
 
-    ############## Step 9 #####################
-    # Transfer the blocks of data from the oscilloscope using ps6000GetValuesBulk.
-    status["GetValuesBulk"] = ps.ps6000GetValuesBulk(
-        chandle,
-        ctypes.byref(cmaxSamples),
-        0,
-        num_measures - 1,
-        0,
-        0,
-        ctypes.byref(overflow),
-    )
-    assert_pico_ok(status["GetValuesBulk"])
+    # ############## Step 9 #####################
+    # # Transfer the blocks of data from the oscilloscope using ps6000GetValuesBulk.
+    # status["GetValuesBulk"] = ps.ps6000GetValuesBulk(
+    #     chandle,
+    #     ctypes.byref(cmaxSamples),
+    #     0,
+    #     num_measures - 1,
+    #     0,
+    #     0,
+    #     ctypes.byref(overflow),
+    # )
+    # assert_pico_ok(status["GetValuesBulk"])
 
-    ############# Step 10 ######################
+    # ############# Step 10 ######################
     # Retrieve the time offset for each data segment using ps6000GetValuesTriggerTimeOffsetBulk64.
-    Times = (ctypes.c_int64 * num_measures)()
-    TimeUnits = (ctypes.c_int64 * num_measures)()
-    status[
-        "GetValuesTriggerTimeOffsetBulk"
-    ] = ps.ps6000GetValuesTriggerTimeOffsetBulk64(
-        chandle, ctypes.byref(Times), ctypes.byref(
-            TimeUnits), 0, num_measures - 1
-    )
-    assert_pico_ok(status["GetValuesTriggerTimeOffsetBulk"])
-    trig_offsets = np.array(Times)
-    ############# Step 11 ######################
-    # Display the data.
+    # trig_offsets = pico.get_trig_offsets()
+    # ############# Step 11 ######################
+    # # Display the data.
 
-    ############# Step 12 ######################
-    # Repeat steps 6 to 11 if necessary.
+    # ############# Step 12 ######################
+    # # Repeat steps 6 to 11 if necessary.
 
-    ############# Step 13 ######################
-    status["stop"] = ps.ps6000Stop(chandle)
-    assert_pico_ok(status["stop"])
-    
-    assert(timebase == 3) #Otherwise trace alignment is destroyed.
-    data = np.array(bufferAMax, dtype=np.int16)
+    # ############# Step 13 ######################
+    # status["stop"] = ps.ps6000Stop(chandle)
+    # assert_pico_ok(status["stop"])
+    # assert(timebase == 3) #Otherwise trace alignment is destroyed.
+    data, triggerbuf = pico.receiveData()
+    trig_offsets = pico.get_trig_offsets()
+    data = np.array(data, dtype=np.int16)
+    # for i in range(490, 500):
+    #     plt.figure(figsize=(8, 4))  # 每次创建新窗口
+    #     plt.plot(data[i], color="#114cd6")
+    #     plt.title(f"Trace {i+1}/{num_traces}")
+    #     plt.xlabel("Sample Points")
+    #     plt.ylabel("Amplitude")
+    #     plt.grid(True)
+
+    #     plt.show()  # 显示窗口，等待用户关闭后才继续
     shifted = 0
     for i in range(0, num_measures):
     	if (trig_offsets[i]//1000) > 800:
@@ -346,7 +302,7 @@ def get_measurements(num_measures, preTrigger, postTrigger, chandle, cmaxSamples
     	    shifted += 1
     print("Shifted: %d"%shifted)
     if args.with_trigger:
-        trigger = np.array(bufferBMax, dtype=np.int16)
+        trigger = np.array(triggerbuf, dtype=np.int16)
         for i in range(0, num_measures):
     	    if (trig_offsets[i]//1000) > 800:
     	        trigger[i] = np.roll(trigger[i], 1)
@@ -379,6 +335,7 @@ if nstate != 1:
     flags_key[1,:] = 1
 
 # seed=0xd8fdc297
+"""WARNING: If this line is not needed or not needed, the dpay array should be changed accordingly"""
 for i in range(ORDER):
     if nstate == 1: break
     for j in range(16):
@@ -391,7 +348,15 @@ if args.univ_ttest:
 else:
     postTrigger = 9000
 
-chandle, cmaxSamples, timebase = setup_pico(N, preTrigger, postTrigger)
+# chandle, cmaxSamples, timebase = setup_pico(N, preTrigger, postTrigger)
+"""PicoScope"""
+pico = PicoScope(preTrigger, postTrigger, nbatch)
+pico.setupDataChannel()
+pico.setupTriggerChannel()
+pico.setupTimeBase()
+pico.setupSeqmode(nbatch)
+pico.setupBuffer()
+
 if args.univ_ttest:
     ttest = Ttest(d=3)#preTrigger+postTrigger,
 else:
@@ -408,10 +373,16 @@ else:
 
 last_plot = 0
 
+
+
+
+
+
+
 for _ in range(0, M):
     t1 = time.time()
     # print(1)
-    data, trigger, X = get_measurements(N, preTrigger, postTrigger, chandle, cmaxSamples, timebase)
+    data, trigger, X = get_measurements(pico, N, preTrigger, postTrigger)
 
     if args.univ_ttest:
         ttest.fit_u(data, X)
@@ -457,7 +428,7 @@ for _ in range(0, M):
 
 ############# Step 14 ######################
 # Close unitDisconnect the scope
-ps.ps6000CloseUnit(chandle)
-
+# ps.ps6000CloseUnit(chandle)
+pico.close()
 
 
