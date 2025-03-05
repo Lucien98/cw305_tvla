@@ -36,9 +36,10 @@ ranges_mV = {
     200000: 13,
 }
 
+ORDER = 2
 
-bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top.bit"
-bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/bitstream/cw305_top_wrng.bit"
+bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top_trig_wrng_o%d.bit" % ORDER
+# bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/bitstream/cw305_top_wrng.bit"
 target = CW305()
 target.con(bsfile=bitstream_path, force=True)
 print(bitstream_path)
@@ -67,7 +68,6 @@ args = parser.parse_args()
 target.clkusbautooff = True
 target.clksleeptime = 1
 
-ORDER = 1
 
 def printBytes(info, data):
     n = len(data)*2
@@ -204,8 +204,11 @@ def setup_pico(num_measures, preTrigger, postTrigger):
 
 def batchRun():
 	key_used,pt_used,state_used = target.batchRun(nbatch, nstate, init_key, init_pt, flags_key, flags_pt, refreshes)#, seed=seed
-	time.sleep(3.4)
-	last_ct_shares = target.readOutput()
+	if ORDER == 1:
+		time.sleep(3.4)
+	if ORDER == 2:
+		time.sleep(5.6)
+	last_ct_shares = target.readOutput(ORDER)
 	last_ct_shares = bytes(last_ct_shares)
 	last_ct = xorbytes(last_ct_shares, 1)
 	# printBytes("last_ct_shares = ", bytes(reversed(last_ct_shares)))
@@ -319,7 +322,7 @@ def get_measurements(pico, num_measures, preTrigger, postTrigger):
 N = 5000            # traces per block
 M = 20000             # number of blocks
 plot_delta = 40000
-preTrigger  = 10 # samples to record BEFORE trigger
+preTrigger  = 63 # samples to record BEFORE trigger
 num_traces = 0
 
 nbatch = N
@@ -344,14 +347,14 @@ for i in range(ORDER):
 
 # samples to record AFTER/WHILE trigger
 if args.univ_ttest:
-    postTrigger = 9000
+    postTrigger = 6625
 else:
-    postTrigger = 9000
+    postTrigger = 6625
 
 # chandle, cmaxSamples, timebase = setup_pico(N, preTrigger, postTrigger)
 """PicoScope"""
 pico = PicoScope(preTrigger, postTrigger, nbatch)
-pico.setupDataChannel()
+pico.setupDataChannel(ORDER)
 pico.setupTriggerChannel()
 pico.setupTimeBase()
 pico.setupSeqmode(nbatch)

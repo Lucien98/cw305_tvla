@@ -28,7 +28,7 @@ class PicoScope(metaclass=Singleton):
 		self.buffer = [(ctypes.c_int16 * self.maxsamples)() for i in range(nbatch)]
 		self.triggerbuf = [(ctypes.c_int16 * self.maxsamples)() for i in range(nbatch)]
 
-	def setupDataChannel(self):
+	def setupDataChannel(self, order):
 		# Set up channel B
 		# handle = chandle
 		# channel = ps6000_CHANNEL_B = 0
@@ -37,7 +37,10 @@ class PicoScope(metaclass=Singleton):
 		# range = ps6000_50mV
 		# analogue offset = 0 V
 		# chBRange = 8
-		self.status["setChB"] = ps.ps6000SetChannel(self.chandle, 1, 1, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_50MV'], 0, 0)
+		if order == 1:
+			self.status["setChB"] = ps.ps6000SetChannel(self.chandle, 1, 1, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_50MV'], 0, 0)
+		if order == 2:
+			self.status["setChB"] = ps.ps6000SetChannel(self.chandle, 1, 1, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_200MV'], 0, 0)
 		assert_pico_ok(self.status["setChB"])
 		self.status["setChA"] = ps.ps6000SetChannel(self.chandle, 0, 1, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_5V'], 0, 0)
 		assert_pico_ok(self.status["setChA"])
