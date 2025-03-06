@@ -31,18 +31,22 @@ def get_umsk_data(data, order):
     data_big = bytes(data_little)
     return data_big
 
-ORDER = 2
-
-bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top_trig_wrng_o%d.bit" % ORDER
+ORDER = 1
+ALLZEROS = False
+DOM=True
+if DOM:
+    bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/DOM_41/vivado_dom41/bitstream/cw305_top_o%d.bit" % ORDER
+else:
+    bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top_trig_wrng_o%d.bit" % ORDER
 
 print("####################")
 print("# Programming the target with default bitsteam")
 print("####################\n")
 print(bitstream_path)
 target = CW305()
-target.con(bsfile=bitstream_path, force=False)
+target.con(bsfile=bitstream_path, force=True)
 
-FpgaClkFreq=10.0E6 #1.5625E6
+FpgaClkFreq=10.0E6 #1.5625E6#
 target.pll.pll_outfreq_set(FpgaClkFreq, 1)
 target.pll.pll_outfreq_set(10e6, 0)
 
@@ -59,10 +63,14 @@ init_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
 init_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
 flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
 # plaintext are all random
-flags_pt=np.ones([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
+if not ALLZEROS:
+    flags_pt=np.ones([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
+else:
+    flags_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
+
 refreshes=[]
 # random key, fixed key is configured in flags_key[0,:]
-if nstate != 1:
+if (nstate != 1) and (not ALLZEROS):
     flags_key[1,:] = 1
 
 seed=0xd8fdc297
@@ -70,7 +78,8 @@ seed=None
 for i in range(ORDER):
     if nstate == 1: break
     for j in range(16):
-        refreshes.append([('k',16*i+j),('k',16*ORDER+j)])
+        if not ALLZEROS:
+            refreshes.append([('k',16*i+j),('k',16*ORDER+j)])
 #         print(('k',16*i+j),('k',16*ORDER+j))
 #     print()
 # print(refreshes)
@@ -83,7 +92,7 @@ gen_settings=False
 key_used,pt_used,state_used = target.batchRun(nbatch, nstate, init_key, init_pt, flags_key, flags_pt, refreshes, gen_settings=gen_settings, seed=seed)#
 ## order 1: 3.4, order 2: 5.6
 if ORDER == 1:
-    time.sleep(3.4)
+    time.sleep(3.4+2.2)
 if ORDER == 2:
     time.sleep(5.6)
 
@@ -108,6 +117,7 @@ hw_ciphertext = get_umsk_data(sh_ciphertext, ORDER)
 
 printBytes("ciphertext from hardware: ", hw_ciphertext)
 printBytes("ciphertext from local:    ", umsk_ciphertext)
+# printBytes("ciphertext from local:    ", bytes(reversed(umsk_ciphertext)))
 printBytes("plaintext from local:    ", umsk_plaintext)
 printBytes("key from local:    ", umsk_key)
 

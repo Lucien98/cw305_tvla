@@ -37,8 +37,21 @@ ranges_mV = {
 }
 
 ORDER = 2
+# normal frequency: 1.5625MHz, otherwise 10MHz
+NORMAL_FRE = True
+NORMAL_FRE = False
 
-bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top_trig_wrng_o%d.bit" % ORDER
+DOM = True
+
+THREE_STAGED = True
+
+TV=True
+TV=False
+
+if DOM:
+    bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/DOM_41/vivado_dom41/bitstream/cw305_top_o%d.bit" % ORDER
+else:
+    bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top_trig_wrng_o%d.bit" % ORDER
 # bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/bitstream/cw305_top_wrng.bit"
 target = CW305()
 target.con(bsfile=bitstream_path, force=True)
@@ -60,9 +73,10 @@ args = parser.parse_args()
 # target.pll.pll_outenable_set(True, 1)
 # target.pll.pll_outenable_set(False, 2)
 
-# FpgaClkFreq=1.5625E6*6
-# target.pll.pll_outfreq_set(FpgaClkFreq, 1)
-# target.pll.pll_outfreq_set(10e6, 0)
+if NORMAL_FRE:
+    FpgaClkFreq=1.5625E6*6
+    target.pll.pll_outfreq_set(FpgaClkFreq, 1)
+    target.pll.pll_outfreq_set(10e6, 0)
 
 # 1ms is plenty of idling time
 target.clkusbautooff = True
@@ -316,13 +330,16 @@ def get_measurements(pico, num_measures, preTrigger, postTrigger):
         return data, None, state_used.astype(np.uint16).ravel() # X
 
 
-# N = 40            # traces per block
-# M = 1             # number of blocks
-# plot_delta = 40
-N = 5000            # traces per block
-M = 20000             # number of blocks
-plot_delta = 40000
-preTrigger  = 63 # samples to record BEFORE trigger
+N = 40            # traces per block
+M = 1             # number of blocks
+plot_delta = 40
+if not TV:
+    N = 5000            # traces per block
+    M = 20000             # number of blocks
+    plot_delta = 40000
+preTrigger  = 150 # samples to record BEFORE trigger
+if NORMAL_FRE:
+    preTrigger = 400
 num_traces = 0
 
 nbatch = N
@@ -347,7 +364,17 @@ for i in range(ORDER):
 
 # samples to record AFTER/WHILE trigger
 if args.univ_ttest:
-    postTrigger = 6625
+    # postTrigger = 6625
+    if THREE_STAGED:
+        if NORMAL_FRE:
+            postTrigger = 16600
+        else:
+            postTrigger = int(10500/2)+375
+    else:
+        if NORMAL_FRE:
+            postTrigger = 20600
+        else:
+            postTrigger = int(13000/2)+375
 else:
     postTrigger = 6625
 
@@ -355,7 +382,7 @@ else:
 """PicoScope"""
 pico = PicoScope(preTrigger, postTrigger, nbatch)
 pico.setupDataChannel(ORDER)
-pico.setupTriggerChannel()
+pico.setupTriggerChannel()#
 pico.setupTimeBase()
 pico.setupSeqmode(nbatch)
 pico.setupBuffer()

@@ -38,12 +38,17 @@ class PicoScope(metaclass=Singleton):
 		# analogue offset = 0 V
 		# chBRange = 8
 		if order == 1:
-			self.status["setChB"] = ps.ps6000SetChannel(self.chandle, 1, 1, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_50MV'], 0, 0)
-		if order == 2:
 			self.status["setChB"] = ps.ps6000SetChannel(self.chandle, 1, 1, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_200MV'], 0, 0)
-		assert_pico_ok(self.status["setChB"])
-		self.status["setChA"] = ps.ps6000SetChannel(self.chandle, 0, 1, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_5V'], 0, 0)
-		assert_pico_ok(self.status["setChA"])
+		if order == 2:
+			self.status["setChB"] = ps.ps6000SetChannel(self.chandle, 1, 1, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_500MV'], 0, 0)
+		# assert_pico_ok(self.status["setChB"])
+		# self.status["setChA"] = ps.ps6000SetChannel(self.chandle, 0, 0, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_5V'], 0, 0)
+		# assert_pico_ok(self.status["setChA"])
+
+		# self.status["setChC"] = ps.ps6000SetChannel(self.chandle, 2, 0, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_5V'], 0, 0)
+		# assert_pico_ok(self.status["setChC"])
+		# self.status["setChD"] = ps.ps6000SetChannel(self.chandle, 3, 0, ps.PS6000_COUPLING["PS6000_DC_50R"], ps.PS6000_RANGE['PS6000_5V'], 0, 0)
+		# assert_pico_ok(self.status["setChD"])
 
 	def setupTriggerChannel(self):
 		chARange = 8
@@ -130,7 +135,7 @@ class PicoScope(metaclass=Singleton):
 		# TimeIntervalNanoseconds = ctypes.byref(timeIntervalns)
 		# MaxSamples = ctypes.byref(returnedMaxSamples)
 		# Segement index = 0
-		self.timebase = 3
+		self.timebase = 2
 		timeIntervalns = ctypes.c_float()
 		returnedMaxSamples = ctypes.c_int16()
 		self.status["GetTimebase"] = ps.ps6000GetTimebase2(self.chandle, self.timebase, self.maxsamples, ctypes.byref(timeIntervalns), 1, ctypes.byref(returnedMaxSamples), 0)
