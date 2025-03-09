@@ -36,7 +36,29 @@ ranges_mV = {
     200000: 13,
 }
 
-ORDER = 2
+def parse_arguments():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--order', metavar='order', required=False, default=2,
+                            help='program the firmware according to the order', type=int)
+    # parser.add_argument('--initial_sharing', metavar='initial_sharing', required=False, default=2,
+    #                         help='1: key and plaintext without initial sharing, for rngoff option; 2: both key and plaintext with initial sharing, it is the regular case.', type=int)
+    parser.add_argument('--design', metavar='design', required=False, default='noia41',
+                            help='possible values: noia41, noia51, pini41, pini51', type=str)
+    parser.add_argument('--rngoff', action="store_true",
+                            help='choose the bitsteam file with rng on')
+    parser.add_argument('--sample-trace', action='store_true')
+    parser.add_argument('--with-trigger', action='store_true')
+    parser.add_argument('--store-traces', action='store_true')
+    parser.add_argument('--univ-ttest', action='store_true')
+    args = parser.parse_args()
+    return args
+
+
+args = parse_arguments()
+
+ORDER = args.order
 # normal frequency: 1.5625MHz, otherwise 10MHz
 NORMAL_FRE = True
 NORMAL_FRE = False
@@ -45,24 +67,28 @@ DOM = True
 
 THREE_STAGED = True
 
-TV=True
+# TV=True
 TV=False
 
+if args.sample_trace:
+    args.with_trigger = True
+    args.store_traces = True
+    TV = True
+print(TV)
+bslocation=""
+if args.rngoff:
+    bslocation = args.design + "/" + "rngoff"
+else:
+    bslocation = args.design + "/" + "rngon"
+
 if DOM:
-    bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/DOM_41/vivado_dom41/bitstream/cw305_top_o%d.bit" % ORDER
+    bitstream_path = "./bitstream/%s/cw305_top_o%d.bit" % ( bslocation, ORDER)
 else:
     bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top_trig_wrng_o%d.bit" % ORDER
-# bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/bitstream/cw305_top_wrng.bit"
+
 target = CW305()
 target.con(bsfile=bitstream_path, force=True)
 print(bitstream_path)
-
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--with-trigger', action='store_true')
-parser.add_argument('--store-traces', action='store_true')
-parser.add_argument('--univ-ttest', action='store_true')
-args = parser.parse_args()
 
 
 # target.vccint_set(1.0)
@@ -106,116 +132,6 @@ def get_umsk_data(data, order):
     data_big = bytes(data_little)
     return data_big
 
-def setup_pico(num_measures, preTrigger, postTrigger):
-    # Create chandle and status ready for use
-    chandle = ctypes.c_int16()
-    status = {}
-    ps.ps6000CloseUnit(chandle)
-    
-    ############## Step 1 #####################
-    # Open the oscilloscope using ps6000OpenUnit.
-    status["openunit"] = ps.ps6000OpenUnit(ctypes.byref(chandle), None)
-    assert_pico_ok(status["openunit"])
-
-    ############## Step 2 #####################
-    # Select channel ranges and AC/DC coupling using ps6000SetChannel.
-    ch_a_range = ranges_mV[50]
-    status["setChA"] = ps.ps6000SetChannel(chandle, 0, 1, 1, ch_a_range, 0, 2)
-    assert_pico_ok(status["setChA"])
-
-    ch_b_range = ranges_mV[5000]
-    status["setChB"] = ps.ps6000SetChannel(chandle, 1, 1, 0, ch_b_range, 0, 0)
-    assert_pico_ok(status["setChB"])
-
-    # status["SetExternalClock"] = ps.ps6000SetExternalClock(chandle, 2, 200)
-    # print(status["SetExternalClock"])
-    # assert_pico_ok(status["SetExternalClock"])
-
-    ############## Step 3 #####################
-    # Set the number of memory segments equal to or greater than the number of captures required using ps6000MemorySegments. Use ps6000SetNoOfCaptures before each run to specify the number of waveforms to capture.
-    maxSamples = preTrigger + postTrigger
-    cmaxSamples = ctypes.c_int32(maxSamples)
-    status["MemorySegments"] = ps.ps6000MemorySegments(
-        chandle, num_measures, ctypes.byref(cmaxSamples)
-    )
-    assert_pico_ok(status["MemorySegments"])
-
-    status["SetNoOfCaptures"] = ps.ps6000SetNoOfCaptures(chandle, num_measures)
-    assert_pico_ok(status["SetNoOfCaptures"])
-
-    ############## Step 4 #####################
-    # Using ps6000GetTimebase, select timebases until the required nanoseconds per sample is located.
-
-    timebase = 3
-    timeIntervalns = ctypes.c_float()
-    returnedMaxSamples = ctypes.c_int32()
-    status["getTimebase2"] = ps.ps6000GetTimebase2(
-        chandle,
-        timebase,
-        maxSamples,
-        ctypes.byref(timeIntervalns),
-        1,
-        ctypes.byref(returnedMaxSamples),
-        0,
-    )
-    assert_pico_ok(status["getTimebase2"])
-
-    ############## Step 5 #####################
-    # Use the trigger setup functions ps6000SetTriggerChannelConditions, ps6000SetTriggerChannelDirections and ps6000SetTriggerChannelProperties to set up the trigger if required.
-    threshold_adc = int(mV2adc(1000, ch_b_range, ctypes.c_int16(32512)))
-    print(threshold_adc)
-    status["trigger"] = ps.ps6000SetSimpleTrigger(
-        chandle, 1, 1, threshold_adc, 2, 0, 100000
-    )
-    assert_pico_ok(status["trigger"])
-
-
-    ############## Step 8 #####################
-    # Use ps6000SetDataBufferBulk to tell the driver where your memory buffers are. Call the function once for each channel/segment combination for which you require data. For greater efficiency with multiple captures, you could do this outside the loop after step 5.
-    ntraces = num_measures
-    global bufferAMax
-    global bufferBMax
-    global bufferAMin
-    global bufferBMin
-    bufferAMax = []
-    bufferAMin = []
-    bufferBMax = []
-    bufferBMin = []
-
-    for i in range(ntraces):
-        bufferAMax.append((ctypes.c_int16 * maxSamples)())
-        bufferAMin.append((ctypes.c_int16 * maxSamples)())
-        status["SetDataBuffersBulk"] = ps.ps6000SetDataBuffersBulk(
-            chandle,
-            0,
-            ctypes.byref(bufferAMax[i]),
-            ctypes.byref(bufferAMin[i]),
-            maxSamples,
-            i,
-            0,
-        )
-        assert_pico_ok(status["SetDataBuffersBulk"])
-
-        if args.with_trigger:
-            bufferBMax.append((ctypes.c_int16 * maxSamples)())
-            bufferBMin.append((ctypes.c_int16 * maxSamples)())
-            status["SetDataBuffersBulk"] = ps.ps6000SetDataBuffersBulk(
-                chandle,
-                1,
-                ctypes.byref(bufferBMax[i]),
-                ctypes.byref(bufferBMin[i]),
-                maxSamples,
-                i,
-                0,
-            )
-        assert_pico_ok(status["SetDataBuffersBulk"])
-    overflow = (ctypes.c_int64 * num_measures)()
-    ready = ctypes.c_int16(0)
-    check = ctypes.c_int16(0)
-
-
-    return chandle, cmaxSamples, timebase
-
 def batchRun():
 	key_used,pt_used,state_used = target.batchRun(nbatch, nstate, init_key, init_pt, flags_key, flags_pt, refreshes)#, seed=seed
 	if ORDER == 1:
@@ -254,64 +170,22 @@ def batchRun():
 
 
 def get_measurements(pico, num_measures, preTrigger, postTrigger):
-    # status = {}
-    # ############## Step 6 #####################
-    # # Start the oscilloscope running using ps6000RunBlock.
-    # status["runBlock"] = ps.ps6000RunBlock(
-    #     chandle, preTrigger, postTrigger, timebase, 0, None, 0, None, None
-    # )
-    # assert_pico_ok(status["runBlock"])
-    # time.sleep(1)
-    # overflow = (ctypes.c_int64 * num_measures)()
-    # ready = ctypes.c_int16(0)
-    # check = ctypes.c_int16(0)
     pico.runBlock()
 
-    ############## Step 7 #####################
-    # Wait until the oscilloscope is ready using the ps6000BlockReady callback.
-    # print(2)
     state_used = batchRun()
-    # while ready.value == check.value:
-    #     status["isReady"] = ps.ps6000IsReady(chandle, ctypes.byref(ready))
-
-    # ############## Step 9 #####################
-    # # Transfer the blocks of data from the oscilloscope using ps6000GetValuesBulk.
-    # status["GetValuesBulk"] = ps.ps6000GetValuesBulk(
-    #     chandle,
-    #     ctypes.byref(cmaxSamples),
-    #     0,
-    #     num_measures - 1,
-    #     0,
-    #     0,
-    #     ctypes.byref(overflow),
-    # )
-    # assert_pico_ok(status["GetValuesBulk"])
-
-    # ############# Step 10 ######################
-    # Retrieve the time offset for each data segment using ps6000GetValuesTriggerTimeOffsetBulk64.
-    # trig_offsets = pico.get_trig_offsets()
-    # ############# Step 11 ######################
-    # # Display the data.
-
-    # ############# Step 12 ######################
-    # # Repeat steps 6 to 11 if necessary.
-
-    # ############# Step 13 ######################
-    # status["stop"] = ps.ps6000Stop(chandle)
-    # assert_pico_ok(status["stop"])
-    # assert(timebase == 3) #Otherwise trace alignment is destroyed.
     data, triggerbuf = pico.receiveData()
     trig_offsets = pico.get_trig_offsets()
     data = np.array(data, dtype=np.int16)
-    # for i in range(490, 500):
-    #     plt.figure(figsize=(8, 4))  # 每次创建新窗口
-    #     plt.plot(data[i], color="#114cd6")
-    #     plt.title(f"Trace {i+1}/{num_traces}")
-    #     plt.xlabel("Sample Points")
-    #     plt.ylabel("Amplitude")
-    #     plt.grid(True)
+    for i in range(40):
+        if not TV: break
+        plt.figure(figsize=(8, 4))  # 每次创建新窗口
+        plt.plot(data[i], color="#114cd6")
+        plt.title(f"Trace {i+1}/{num_traces}")
+        plt.xlabel("Sample Points")
+        plt.ylabel("Amplitude")
+        plt.grid(True)
 
-    #     plt.show()  # 显示窗口，等待用户关闭后才继续
+        plt.show()  # 显示窗口，等待用户关闭后才继续
     shifted = 0
     for i in range(0, num_measures):
     	if (trig_offsets[i]//1000) > 800:
@@ -333,10 +207,14 @@ def get_measurements(pico, num_measures, preTrigger, postTrigger):
 N = 40            # traces per block
 M = 1             # number of blocks
 plot_delta = 40
-if not TV:
+if not TV and not args.rngoff:
     N = 5000            # traces per block
     M = 20000             # number of blocks
     plot_delta = 40000
+if not TV and args.rngoff:
+    N = 5000            # traces per block
+    M = 20             # number of blocks
+    plot_delta = 10000
 preTrigger  = 150 # samples to record BEFORE trigger
 if NORMAL_FRE:
     preTrigger = 400
@@ -346,20 +224,27 @@ nbatch = N
 nstate = 2
 init_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
 init_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
-flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
-# plaintext are all random
-flags_pt=np.ones([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
 refreshes=[]
-# random key, fixed key is configured in flags_key[0,:]
-if nstate != 1:
-    flags_key[1,:] = 1
+if not args.rngoff:
+    flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
+    # plaintext are all random
+    flags_pt=np.ones([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
+    # random key, fixed key is configured in flags_key[0,:]
+    if nstate != 1:
+        flags_key[1,:] = 1
+    for i in range(ORDER):
+        for j in range(16):
+            refreshes.append([('k',16*i+j),('k',16*ORDER+j)])
 
-# seed=0xd8fdc297
-"""WARNING: If this line is not needed or not needed, the dpay array should be changed accordingly"""
-for i in range(ORDER):
-    if nstate == 1: break
-    for j in range(16):
-        refreshes.append([('k',16*i+j),('k',16*ORDER+j)])
+if args.rngoff:
+    flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
+    flags_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
+    for i in range(16):
+        # the last share of plaintext is random
+        flags_pt[:, 10 + i + 16 * ORDER] = 1
+    for i in range(16):
+        # the last share of key of random set is random
+        flags_key[1,i+16*ORDER] = 1
 
 
 # samples to record AFTER/WHILE trigger
@@ -378,10 +263,9 @@ if args.univ_ttest:
 else:
     postTrigger = 6625
 
-# chandle, cmaxSamples, timebase = setup_pico(N, preTrigger, postTrigger)
 """PicoScope"""
 pico = PicoScope(preTrigger, postTrigger, nbatch)
-pico.setupDataChannel(ORDER)
+pico.setupDataChannel(ORDER, args)
 pico.setupTriggerChannel()#
 pico.setupTimeBase()
 pico.setupSeqmode(nbatch)
