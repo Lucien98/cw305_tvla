@@ -31,11 +31,36 @@ def get_umsk_data(data, order):
     data_big = bytes(data_little)
     return data_big
 
-ORDER = 1
-ALLZEROS = False
+def parse_arguments():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--order', metavar='order', required=False, default=2,
+                            help='program the firmware according to the order', type=int)
+    parser.add_argument('--initial_sharing', metavar='initial_sharing', required=False, default=2,
+                            help='0: key and plaintext are set to all zeros, for debugging; 1: key and plaintext without initial sharing, for rngoff option; 2: both key and plaintext with initial sharing, it is the regular case.', type=int)
+    parser.add_argument('--design', metavar='design', required=False, default='noia41',
+                            help='possible values: noia41, noia51, pini41, pini51', type=str)
+    parser.add_argument('--rngoff', action="store_true",
+                            help='choose the bitsteam file with rng on')
+    parser.add_argument('--print_dpay', action="store_true",
+                            help='print the dpay array to copy to the usb.c')
+    args = parser.parse_args()
+    return args
+
+
+args = parse_arguments()
+
+ORDER = args.order
 DOM=True
+bslocation=""
+if args.rngoff:
+    bslocation = args.design + "/" + "rngoff"
+else:
+    bslocation = args.design + "/" + "rngon"
+
 if DOM:
-    bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/DOM_41/vivado_dom41/bitstream/cw305_top_o%d.bit" % ORDER
+    bitstream_path = "./bitstream/%s/cw305_top_o%d.bit" % ( bslocation, ORDER)
 else:
     bitstream_path = "E:/2025/SMAesH-challenge/fpga_designs/SMAesH/cw305_ucg_target/cw305_ucg_target.runs/impl_1/cw305_top_trig_wrng_o%d.bit" % ORDER
 
@@ -59,36 +84,41 @@ print("####################")
 
 nbatch = 5000
 nstate = 2
+if args.initial_sharing == 0:
+    nstate = 1
 init_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
 init_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
 flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
 # plaintext are all random
-if not ALLZEROS:
+if args.initial_sharing == 2:
     flags_pt=np.ones([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
 else:
     flags_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
 
-refreshes=[]
-# random key, fixed key is configured in flags_key[0,:]
-if (nstate != 1) and (not ALLZEROS):
-    flags_key[1,:] = 1
+# When args.initial_sharing == 1, there's no intial sharing
+if args.initial_sharing == 1:
+    for i in range(16):
+        # the last share of plaintext is random
+        flags_pt[:, 10 + i + 16 * ORDER] = 1
+    for i in range(16):
+        # the last share of key of random set is random
+        flags_key[1,i+16*ORDER] = 1
 
+refreshes=[]
+
+# random key, fixed key is configured in flags_key[0,:]
+if args.initial_sharing == 2:
+    flags_key[1,:] = 1
+    # initial_sharing for key in fixed set.
+    for i in range(ORDER):
+        if args.initial_sharing != 2: break
+        for j in range(16):
+            refreshes.append([('k',16*i+j),('k',16*ORDER+j)])
+        #     print(('k',16*i+j),('k',16*ORDER+j))
+        # print()
 seed=0xd8fdc297
 seed=None
-for i in range(ORDER):
-    if nstate == 1: break
-    for j in range(16):
-        if not ALLZEROS:
-            refreshes.append([('k',16*i+j),('k',16*ORDER+j)])
-#         print(('k',16*i+j),('k',16*ORDER+j))
-#     print()
-# print(refreshes)
-# print(init_pt)
-# print(init_key)
-# print(flags_key)
-# print(flags_pt)
-gen_settings=True
-gen_settings=False
+gen_settings=args.print_dpay
 key_used,pt_used,state_used = target.batchRun(nbatch, nstate, init_key, init_pt, flags_key, flags_pt, refreshes, gen_settings=gen_settings, seed=seed)#
 ## order 1: 3.4, order 2: 5.6
 if ORDER == 1:
