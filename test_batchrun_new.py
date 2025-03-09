@@ -88,32 +88,60 @@ if args.initial_sharing == 0:
     nstate = 1
 init_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
 init_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
-flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
-# plaintext are all random
-if args.initial_sharing == 2:
-    flags_pt=np.ones([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
-else:
+
+if args.initial_sharing == 0:
+    # key and pt are fixed zeros, and no refresh
+    flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
     flags_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
 
-# When args.initial_sharing == 1, there's no intial sharing
-if args.initial_sharing == 1:
+if args.initial_sharing == 1 or args.initial_sharing == 2:
+    flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
+    flags_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
     for i in range(16):
-        # the last share of plaintext is random
-        flags_pt[:, 10 + i + 16 * ORDER] = 1
-    for i in range(16):
-        # the last share of key of random set is random
-        flags_key[1,i+16*ORDER] = 1
+        # set random plaintext
+        flags_pt[1:, 10 + i + 16 * ORDER] = 1
 
 refreshes=[]
-
-# random key, fixed key is configured in flags_key[0,:]
 if args.initial_sharing == 2:
-    flags_key[1,:] = 1
-    # initial_sharing for key in fixed set.
+    # provides key and plaintext with initial sharing
     for i in range(ORDER):
-        if args.initial_sharing != 2: break
         for j in range(16):
             refreshes.append([('k',16*i+j),('k',16*ORDER+j)])
+            refreshes.append([('t',16*i+j),('t',16*ORDER+j)])
+
+# if args.initial_sharing == 2:
+#     flags_key=np.zeros([nstate, 16*(ORDER + 1)],dtype=np.uint8)
+#     flags_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
+#     for i in range(16):
+#         # set random plaintext
+#         flags_pt[:, 10 + i + 16 * ORDER] = 1
+
+
+
+# # plaintext are all random
+# if args.initial_sharing == 2:
+#     flags_pt=np.ones([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
+# else:
+#     flags_pt=np.zeros([nstate, 10 + 16*(ORDER + 1)],dtype=np.uint8)
+
+# # When args.initial_sharing == 1, there's no intial sharing
+# if args.initial_sharing == 1:
+#     for i in range(16):
+#         # the last share of plaintext is random
+#         flags_pt[:, 10 + i + 16 * ORDER] = 1
+#     for i in range(16):
+#         # the last share of key of random set is random
+#         flags_key[1,i+16*ORDER] = 1
+
+
+# # random key, fixed key is configured in flags_key[0,:]
+# if args.initial_sharing == 2:
+#     flags_key[1,:] = 1
+#     # initial_sharing for key in fixed set.
+#     for i in range(ORDER):
+#         if args.initial_sharing != 2: break
+#         for j in range(16):
+#             refreshes.append([('k',16*i+j),('k',16*ORDER+j)])
         #     print(('k',16*i+j),('k',16*ORDER+j))
         # print()
 seed=0xd8fdc297
@@ -122,9 +150,10 @@ gen_settings=args.print_dpay
 key_used,pt_used,state_used = target.batchRun(nbatch, nstate, init_key, init_pt, flags_key, flags_pt, refreshes, gen_settings=gen_settings, seed=seed)#
 ## order 1: 3.4, order 2: 5.6
 if ORDER == 1:
-    time.sleep(3.4+2.2)
+    # 4.18 do not work
+    time.sleep(4.19)
 if ORDER == 2:
-    time.sleep(5.6)
+    time.sleep(6.58)
 
 last_ct_shares = target.readOutput(ORDER)
 last_ct_shares = bytes(last_ct_shares)
